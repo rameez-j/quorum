@@ -13,6 +13,7 @@
   "dependencies": {
     "@quorum/shared": "*",
     "@quorum/server": "*",
+    "@quorum/relay": "*",
     "@modelcontextprotocol/sdk": "^1",
     "commander": "^13",
     "ws": "^8",
