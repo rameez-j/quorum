@@ -8,24 +8,24 @@ When a group of 2-10 people are working on different parts of the same project, 
 
 ```
 ┌──────────────────────────────────────────────────┐
-│               WebSocket Relay Server              │
-│                                                   │
-│   ┌─────────┐  ┌─────────┐  ┌─────────┐         │
+│               WebSocket Relay Server             │
+│                                                  │
+│   ┌─────────┐  ┌─────────┐  ┌─────────┐          │
 │   │ Room A  │  │ Room B  │  │ Room C  │  ...     │
-│   └─────────┘  └─────────┘  └─────────┘         │
-└────────┬──────────────────────────┬───────────────┘
+│   └─────────┘  └─────────┘  └─────────┘          │
+└────────┬──────────────────────────┬──────────────┘
          │                          │
      WebSocket                  WebSocket
          │                          │
 ┌────────▼─────────────┐  ┌────────▼─────────────┐
-│   Host (Alice)        │  │  Teammate (Bob)       │
-│                       │  │                       │
-│  Quorum MCP Server    │  │  Local MCP Proxy      │
-│  + Context Store      │  │  (forwards to host)   │
-│  (JSON files)         │  │                       │
-│         │             │  │         │             │
-│  Claude Code          │  │  Claude Code          │
-└───────────────────────┘  └───────────────────────┘
+│   Host (Alice)       │  │  Teammate (Bob)      │
+│                      │  │                      │
+│  Quorum MCP Server   │  │  Local MCP Proxy     │
+│  + Context Store     │  │  (forwards to host)  │
+│  (JSON files)        │  │                      │
+│         │            │  │         │            │
+│  Claude Code         │  │  Claude Code         │
+└──────────────────────┘  └──────────────────────┘
 ```
 
 One person **hosts** the session — their machine runs the MCP server and stores all shared context as JSON files. Teammates **join** the session — their machines run a local MCP proxy that forwards tool calls through a WebSocket relay to the host. The relay is stateless; it just routes messages between clients in the same session.
@@ -34,17 +34,17 @@ One person **hosts** the session — their machine runs the MCP server and store
 
 Quorum exposes 9 tools that AI agents can use naturally:
 
-| Tool | Purpose |
-|------|---------|
-| `get_context` | Get shared project context (decisions, interfaces, dependencies) |
-| `post_decision` | Record an architectural or design decision |
-| `flag_dependency` | Declare a dependency on another member's work |
-| `get_dependencies` | View all declared dependencies |
-| `sync` | Full snapshot of session state and member status |
-| `post_interface` | Define an API contract between components |
+| Tool   |   Purpose   |
+|--------|-------------|
+| `get_context`        | Get shared project context (decisions, interfaces, dependencies) |
+| `post_decision`      | Record an architectural or design decision |
+| `flag_dependency`    | Declare a dependency on another member's work |
+| `get_dependencies`   | View all declared dependencies |
+| `sync`               | Full snapshot of session state and member status |
+| `post_interface`     | Define an API contract between components |
 | `resolve_dependency` | Mark a dependency as resolved |
-| `raise_conflict` | Flag conflicting decisions or interfaces |
-| `resolve_conflict` | Resolve a conflict, optionally superseding a decision |
+| `raise_conflict`     | Flag conflicting decisions or interfaces |
+| `resolve_conflict`   | Resolve a conflict, optionally superseding a decision |
 
 These appear alongside Claude Code's built-in tools. An agent uses them naturally — a developer says "check what the team decided about the database" and the agent calls `get_context`.
 
