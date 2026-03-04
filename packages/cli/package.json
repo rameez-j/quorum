@@ -1,0 +1,27 @@
+{
+  "name": "quorum",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "quorum": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@quorum/shared": "*",
+    "@quorum/server": "*",
+    "@quorum/relay": "*",
+    "@modelcontextprotocol/sdk": "^1",
+    "commander": "^13",
+    "ws": "^8",
+    "zod": "^3"
+  },
+  "devDependencies": {
+    "@types/ws": "^8",
+    "typescript": "^5",
+    "vitest": "^3"
+  }
+}
