@@ -2,7 +2,6 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 
-const CLAUDE_SETTINGS_PATH = join(homedir(), '.claude', 'settings.json');
 const MCP_SERVER_NAME = 'quorum';
 
 interface ClaudeSettings {
@@ -14,10 +13,17 @@ interface ClaudeSettings {
   [key: string]: unknown;
 }
 
-export async function registerMcpServer(proxyPort: number): Promise<void> {
+export function getSettingsPath(project: boolean): string {
+  if (project) {
+    return join(process.cwd(), '.claude', 'settings.json');
+  }
+  return join(homedir(), '.claude', 'settings.json');
+}
+
+export async function registerMcpServer(settingsPath: string): Promise<void> {
   let settings: ClaudeSettings = {};
   try {
-    const raw = await readFile(CLAUDE_SETTINGS_PATH, 'utf-8');
+    const raw = await readFile(settingsPath, 'utf-8');
     settings = JSON.parse(raw) as ClaudeSettings;
   } catch {
     // File doesn't exist yet
@@ -26,21 +32,21 @@ export async function registerMcpServer(proxyPort: number): Promise<void> {
   settings.mcpServers ??= {};
   settings.mcpServers[MCP_SERVER_NAME] = {
     command: 'npx',
-    args: ['-y', 'quorum', '_mcp-proxy', String(proxyPort)],
+    args: ['-y', 'quorum', 'serve'],
   };
 
-  await mkdir(dirname(CLAUDE_SETTINGS_PATH), { recursive: true });
-  await writeFile(CLAUDE_SETTINGS_PATH, JSON.stringify(settings, null, 2));
+  await mkdir(dirname(settingsPath), { recursive: true });
+  await writeFile(settingsPath, JSON.stringify(settings, null, 2));
 }
 
-export async function unregisterMcpServer(): Promise<void> {
+export async function unregisterMcpServer(settingsPath: string): Promise<void> {
   try {
-    const raw = await readFile(CLAUDE_SETTINGS_PATH, 'utf-8');
+    const raw = await readFile(settingsPath, 'utf-8');
     const settings = JSON.parse(raw) as ClaudeSettings;
     if (settings.mcpServers) {
       delete settings.mcpServers[MCP_SERVER_NAME];
     }
-    await writeFile(CLAUDE_SETTINGS_PATH, JSON.stringify(settings, null, 2));
+    await writeFile(settingsPath, JSON.stringify(settings, null, 2));
   } catch {
     // File doesn't exist, nothing to clean up
   }
