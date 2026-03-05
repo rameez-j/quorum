@@ -122,6 +122,20 @@ Quorum exposes 13 MCP tools to Claude Code:
 
 Context tools return an error when no session is active and prompt the user to start or join one first.
 
+## How Tool Calls Flow
+
+```
+1. Teammate's Claude Code calls a tool (e.g., post_decision)
+2. Teammate's quorum serve (in JOINED mode) sends tool_request via WebSocket to relay
+3. Relay forwards the message to the host
+4. Host's quorum serve (in HOSTING mode) dispatches to ContextStore
+5. Host sends tool_response back through the relay
+6. Relay forwards the response to the teammate
+7. Teammate's quorum serve resolves the result back to Claude Code
+```
+
+Concurrent tool calls from multiple teammates are supported via `requestId` correlation.
+
 ## Project Structure
 
 ```
@@ -138,6 +152,8 @@ packages/
         export-context.ts       Export context to markdown
 ```
 
+Build order (managed by Turborepo): `shared` → `server` → `relay` / `cli`
+
 ## Relay Server
 
 The relay routes WebSocket messages between hosts and members. It is deployed as infrastructure and users do not need to run it themselves.
@@ -145,11 +161,47 @@ The relay routes WebSocket messages between hosts and members. It is deployed as
 For development, start the relay locally:
 
 ```bash
-cd packages/relay
-npx tsx src/index.ts
+node packages/relay/dist/index.js
 ```
 
 The relay listens on port 7777 by default. Set `QUORUM_RELAY_URL` to point to a different relay.
+
+For production, a Dockerfile is included:
+
+```bash
+cd packages/relay
+docker build -t quorum-relay .
+docker run -p 7777:7777 quorum-relay
+```
+
+## Context Export Format
+
+When you run `quorum export`, it generates a markdown file like:
+
+```markdown
+# Project Context — Session a1b2c3
+Generated: 2026-03-04T14:30:00Z
+
+## Team
+- Alice (host)
+- Bob
+
+## Decisions
+### #1: Use JWT for authentication (Alice)
+- **Rationale:** Stateless, scales horizontally
+- **Tags:** auth, security
+
+## Interfaces
+### User API (User Service <-> Auth Service)
+- **Status:** agreed
+- **Spec:** GET /users/:id returns { id, email, role }
+
+## Dependencies
+### Auth -> User Service: needs user lookup endpoint
+- **Priority:** blocking
+- **Status:** resolved
+- **Resolution:** Agreed on GET /users/:id
+```
 
 ## Development
 
@@ -168,4 +220,4 @@ cd packages/<name> && npx vitest run
 
 ## License
 
-MIT
+ISC
