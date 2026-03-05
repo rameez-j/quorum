@@ -1,82 +1,170 @@
 # Quorum
 
-Quorum is an MCP-based shared context server that keeps team members' AI agents in sync during collaborative projects. It solves **agentic drift** — the invisible divergence that happens when parallel autonomous agents work on related parts of a codebase without coordination.
-
-When a group of 2-10 people are working on different parts of the same project, each using their own AI agent, Quorum keeps those agents coherent with each other.
+MCP-based shared context server for keeping team members' AI agents in sync. Quorum lets multiple developers' Claude Code instances share decisions, interfaces, dependencies, and conflicts in real time.
 
 ## How It Works
 
+Quorum runs as an MCP server inside Claude Code. When you start or join a session, your Claude Code instance connects to a shared relay, and all participants can read and write to a shared context store through natural conversation.
+
 ```
-┌──────────────────────────────────────────────────┐
-│               WebSocket Relay Server              │
-│                                                   │
-│   ┌─────────┐  ┌─────────┐  ┌─────────┐         │
-│   │ Room A  │  │ Room B  │  │ Room C  │  ...     │
-│   └─────────┘  └─────────┘  └─────────┘         │
-└────────┬──────────────────────────┬───────────────┘
-         │                          │
-     WebSocket                  WebSocket
-         │                          │
-┌────────▼─────────────┐  ┌────────▼─────────────┐
-│   Host (Alice)        │  │  Teammate (Bob)       │
-│                       │  │                       │
-│  Quorum MCP Server    │  │  Local MCP Proxy      │
-│  + Context Store      │  │  (forwards to host)   │
-│  (JSON files)         │  │                       │
-│         │             │  │         │             │
-│  Claude Code          │  │  Claude Code          │
-└───────────────────────┘  └───────────────────────┘
+Claude Code (You)                     Claude Code (Teammate)
+      |                                      |
+      v                                      v
+quorum serve (MCP stdio)             quorum serve (MCP stdio)
+      |                                      |
+      +--- WebSocket ----> Relay <--- WebSocket ---+
+                             |
+                     (routes messages
+                      between host
+                      and members)
 ```
 
-One person **hosts** the session — their machine runs the MCP server and stores all shared context as JSON files. Teammates **join** the session — their machines run a local MCP proxy that forwards tool calls through a WebSocket relay to the host. The relay is stateless; it just routes messages between clients in the same session.
-
-## MCP Tools
-
-Quorum exposes 9 tools that AI agents can use naturally:
-
-| Tool | Purpose |
-|------|---------|
-| `get_context` | Get shared project context (decisions, interfaces, dependencies) |
-| `post_decision` | Record an architectural or design decision |
-| `flag_dependency` | Declare a dependency on another member's work |
-| `get_dependencies` | View all declared dependencies |
-| `sync` | Full snapshot of session state and member status |
-| `post_interface` | Define an API contract between components |
-| `resolve_dependency` | Mark a dependency as resolved |
-| `raise_conflict` | Flag conflicting decisions or interfaces |
-| `resolve_conflict` | Resolve a conflict, optionally superseding a decision |
-
-These appear alongside Claude Code's built-in tools. An agent uses them naturally — a developer says "check what the team decided about the database" and the agent calls `get_context`.
-
-## Prerequisites
-
-- Node.js 18+
-- npm 10+
-- A running relay server (see [Running the Relay](#running-the-relay))
+The host's instance holds the canonical context store (`.collab/` directory). Members' tool calls are forwarded through the relay to the host and back.
 
 ## Setup
 
-```bash
-# Clone and install
-git clone https://github.com/rameez-j/quorum.git
-cd quorum
-npm install
+### 1. Install
 
-# Build all packages
-npm run build
+```bash
+npm install -g quorum
 ```
 
-## Running the Relay
-
-The relay server must be running for hosts and members to connect. By default it listens on port 7777.
+### 2. Register with Claude Code
 
 ```bash
-# From the repo root
+quorum install            # Global (all projects)
+quorum install --project  # Project-level only
+```
+
+This adds Quorum to your Claude Code MCP settings. To remove it later:
+
+```bash
+quorum uninstall            # Global
+quorum uninstall --project  # Project-level
+```
+
+### 3. Restart Claude Code
+
+After registering, restart Claude Code so it picks up the new MCP server. Quorum tools will now be available in every conversation.
+
+## Usage
+
+All interaction happens through Claude Code -- no separate terminals needed.
+
+### Start a session (host)
+
+Tell Claude Code:
+
+> "Start a quorum session"
+
+Claude calls `quorum_start` with your name, creates a session, and returns a session ID. Share this ID with your teammates.
+
+### Join a session (member)
+
+Tell Claude Code:
+
+> "Join quorum session abc123"
+
+Claude calls `quorum_join` with the session ID and your name. You are now connected to the host's context store.
+
+### Collaborate
+
+Once in a session, all 9 context tools are available. You can ask Claude to:
+
+- **Record a decision:** "Post a decision that we're using PostgreSQL for the database"
+- **Define an interface:** "Define the API contract between the auth service and the gateway"
+- **Flag a dependency:** "Flag that my payment module depends on Alice's user service"
+- **Check context:** "Show me all current decisions and interfaces"
+- **Sync up:** "Give me a full sync of the session state"
+- **Raise a conflict:** "These two decisions about the API format contradict each other"
+- **Resolve things:** "Resolve that dependency -- Alice shipped the user service"
+
+### End a session
+
+> "Stop the quorum session"
+
+Claude calls `quorum_stop`, disconnects from the relay, and returns to idle. The context data remains in `.collab/` on the host's machine.
+
+### Export context
+
+```bash
+quorum export
+```
+
+Exports the session context to `.collab/context.md` as a readable markdown file.
+
+## MCP Tools
+
+Quorum exposes 13 MCP tools to Claude Code:
+
+### Session management (4 tools)
+
+| Tool | Description |
+|------|-------------|
+| `quorum_start` | Start a new session as host |
+| `quorum_join` | Join an existing session as member |
+| `quorum_status` | Check current session status |
+| `quorum_stop` | End the current session |
+
+### Context operations (9 tools)
+
+| Tool | Description |
+|------|-------------|
+| `get_context` | Get shared context (decisions, interfaces, dependencies) |
+| `post_decision` | Record an architecture or design decision |
+| `flag_dependency` | Declare a dependency on another member's work |
+| `get_dependencies` | View all dependencies and their status |
+| `sync` | Get a full snapshot of session state |
+| `post_interface` | Define an API contract between components |
+| `resolve_dependency` | Mark a dependency as resolved |
+| `raise_conflict` | Flag conflicting decisions or interfaces |
+| `resolve_conflict` | Resolve a conflict |
+
+Context tools return an error when no session is active and prompt the user to start or join one first.
+
+## How Tool Calls Flow
+
+```
+1. Teammate's Claude Code calls a tool (e.g., post_decision)
+2. Teammate's quorum serve (in JOINED mode) sends tool_request via WebSocket to relay
+3. Relay forwards the message to the host
+4. Host's quorum serve (in HOSTING mode) dispatches to ContextStore
+5. Host sends tool_response back through the relay
+6. Relay forwards the response to the teammate
+7. Teammate's quorum serve resolves the result back to Claude Code
+```
+
+Concurrent tool calls from multiple teammates are supported via `requestId` correlation.
+
+## Project Structure
+
+```
+packages/
+  shared/       Types, protocol messages, utilities
+  server/       ContextStore + tool dispatcher (JSON file persistence)
+  relay/        WebSocket relay server (hosted infrastructure)
+  cli/
+    src/
+      index.ts                  CLI entry point (install/uninstall/serve/export)
+      config.ts                 Claude Code settings management
+      commands/
+        serve.ts                Stateful MCP server with session state machine
+        export-context.ts       Export context to markdown
+```
+
+Build order (managed by Turborepo): `shared` → `server` → `relay` / `cli`
+
+## Relay Server
+
+The relay routes WebSocket messages between hosts and members. It is deployed as infrastructure and users do not need to run it themselves.
+
+For development, start the relay locally:
+
+```bash
 node packages/relay/dist/index.js
-
-# Or with a custom port
-PORT=8888 node packages/relay/dist/index.js
 ```
+
+The relay listens on port 7777 by default. Set `QUORUM_RELAY_URL` to point to a different relay.
 
 For production, a Dockerfile is included:
 
@@ -85,130 +173,6 @@ cd packages/relay
 docker build -t quorum-relay .
 docker run -p 7777:7777 quorum-relay
 ```
-
-## Usage
-
-### Starting a session (host)
-
-```bash
-npx quorum start --name "Alice"
-```
-
-Output:
-```
-Starting Quorum session...
-✓ Session created: a1b2c3
-
-Share with your team: quorum join a1b2c3
-
-Waiting for members...
-```
-
-The host's machine runs the MCP server and stores context in a `.collab/` directory in the current working directory.
-
-### Joining a session (teammate)
-
-```bash
-npx quorum join a1b2c3 --name "Bob"
-```
-
-Output:
-```
-Joining session a1b2c3...
-✓ Connected to session a1b2c3
-✓ MCP tools available
-```
-
-The teammate's machine runs a local MCP proxy. All tool calls are forwarded through the relay to the host.
-
-### Exporting context
-
-```bash
-npx quorum export
-```
-
-Generates `.collab/context.md` — a human-readable summary of all decisions, interfaces, dependencies, and conflicts from the session.
-
-### Checking status
-
-```bash
-npx quorum status
-```
-
-### Custom relay URL
-
-By default, the CLI connects to `ws://localhost:7777`. Override with:
-
-```bash
-export QUORUM_RELAY_URL=ws://your-relay-host:7777
-```
-
-## Project Structure
-
-```
-quorum/
-├── packages/
-│   ├── shared/     # @quorum/shared — types, protocol definitions, ID generation
-│   ├── server/     # @quorum/server — MCP server, context store, tool dispatcher
-│   ├── relay/      # @quorum/relay  — stateless WebSocket relay server
-│   └── cli/        # quorum         — CLI commands, MCP proxy, context export
-├── turbo.json
-├── package.json
-└── tsconfig.base.json
-```
-
-Build order (managed by Turborepo): `shared` → `server` → `relay` / `cli`
-
-### Package Details
-
-**`@quorum/shared`** — Types and protocol definitions shared across all packages. Defines `Decision`, `Dependency`, `Interface`, `Conflict`, `Member`, and all WebSocket message types.
-
-**`@quorum/server`** — The MCP server that registers all 9 tools, plus a `ContextStore` that persists session data to JSON files. Also exports a `createToolDispatcher` for executing tool calls directly (used by the host to handle relay-forwarded requests without going through MCP protocol).
-
-**`@quorum/relay`** — A stateless WebSocket server that groups connections by session ID and forwards messages between them. Stores no data.
-
-**`quorum` (CLI)** — The user-facing package with `start`, `join`, `status`, and `export` commands. Includes the MCP proxy that teammates run locally.
-
-## Development
-
-```bash
-# Build all packages
-npm run build
-
-# Run all tests
-npm test
-
-# Build and test in watch mode
-npm run dev
-```
-
-### Tests
-
-```bash
-# Run all tests
-npm test
-
-# Run tests for a specific package
-npx vitest run --project server
-npx vitest run --project shared
-npx vitest run --project relay
-npx vitest run --project cli
-```
-
-## How Tool Calls Flow
-
-```
-1. Teammate's Claude Code calls a tool (e.g., post_decision)
-2. Local MCP proxy receives the call
-3. Proxy sends a tool_request message over WebSocket to the relay
-4. Relay forwards the message to the host
-5. Host's tool dispatcher executes the tool, writing to the JSON store
-6. Host sends a tool_response back through the relay
-7. Relay forwards the response to the teammate's proxy
-8. Proxy returns the result to Claude Code
-```
-
-Concurrent tool calls from multiple teammates are supported via `requestId` correlation.
 
 ## Context Export Format
 
@@ -237,6 +201,21 @@ Generated: 2026-03-04T14:30:00Z
 - **Priority:** blocking
 - **Status:** resolved
 - **Resolution:** Agreed on GET /users/:id
+```
+
+## Development
+
+```bash
+npm install
+npm run build    # Build all packages
+npm run test     # Run all tests
+npm run dev      # Watch mode
+```
+
+Tests use vitest. Run per-package:
+
+```bash
+cd packages/<name> && npx vitest run
 ```
 
 ## License

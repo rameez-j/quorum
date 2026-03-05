@@ -1,9 +1,7 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
-import { startCommand } from './commands/start.js';
-import { joinCommand } from './commands/join.js';
-import { statusCommand } from './commands/status.js';
 import { exportCommand } from './commands/export-context.js';
+import { registerMcpServer, unregisterMcpServer, getSettingsPath } from './config.js';
 
 const program = new Command();
 
@@ -13,21 +11,35 @@ program
   .version('0.1.0');
 
 program
-  .command('start')
-  .description('Start a new shared session (you become the host)')
-  .option('-n, --name <name>', 'Your display name', 'Host')
-  .action(startCommand);
+  .command('install')
+  .description('Register Quorum as an MCP server in Claude Code')
+  .option('--project', 'Register in project-level settings instead of global')
+  .action(async (options: { project?: boolean }) => {
+    const path = getSettingsPath(!!options.project);
+    await registerMcpServer(path);
+    const scope = options.project ? 'project' : 'global';
+    console.log(`✓ Quorum registered in ${scope} Claude Code settings`);
+    console.log('  Restart Claude Code to activate.');
+  });
 
 program
-  .command('join <sessionId>')
-  .description('Join an existing shared session')
-  .option('-n, --name <name>', 'Your display name', 'Member')
-  .action(joinCommand);
+  .command('uninstall')
+  .description('Remove Quorum from Claude Code settings')
+  .option('--project', 'Remove from project-level settings instead of global')
+  .action(async (options: { project?: boolean }) => {
+    const path = getSettingsPath(!!options.project);
+    await unregisterMcpServer(path);
+    const scope = options.project ? 'project' : 'global';
+    console.log(`✓ Quorum removed from ${scope} Claude Code settings`);
+  });
 
 program
-  .command('status')
-  .description('Show current session info')
-  .action(statusCommand);
+  .command('serve')
+  .description('Start the Quorum MCP server (used by Claude Code, not run directly)')
+  .action(async () => {
+    const { serveCommand } = await import('./commands/serve.js');
+    await serveCommand();
+  });
 
 program
   .command('export')
