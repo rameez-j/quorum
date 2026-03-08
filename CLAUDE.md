@@ -8,19 +8,23 @@ Monorepo with 4 packages managed by turborepo:
 - `packages/shared` — Types, protocol messages, utilities
 - `packages/server` — MCP server + ContextStore (JSON file persistence)
 - `packages/relay` — WebSocket relay server (hosted infrastructure)
-- `packages/cli` — CLI entry point (`quorum start/join/stop/status/export`)
+- `packages/cli` — CLI entry point (`quorum install/uninstall/serve/export`) and stateful MCP server with 13 tools
 
 ## Commands
 
-- `npm run build` — Build all packages (order: shared → server → relay/cli)
+- `npm run build` — Build all packages (order: shared -> server -> relay/cli)
 - `npm run test` — Run all tests
 - `npm run dev` — Watch mode for all packages
 
 ## Architecture
 
-- Host runs MCP server locally with ContextStore backed by JSON files in `.collab/`
-- Teammates connect via WebSocket relay, run local MCP proxy
-- 9 MCP tools: get_context, post_decision, flag_dependency, get_dependencies, sync, post_interface, resolve_dependency, raise_conflict, resolve_conflict
+- Claude Code spawns `quorum serve` as an MCP server via stdio
+- The serve process is a stateful MCP server with 13 tools (4 session + 9 context)
+- Session tools (`quorum_start`, `quorum_join`, `quorum_status`, `quorum_stop`) manage lifecycle
+- Context tools (`get_context`, `post_decision`, `flag_dependency`, `get_dependencies`, `sync`, `post_interface`, `resolve_dependency`, `raise_conflict`, `resolve_conflict`) operate on shared state
+- Host creates a ContextStore backed by JSON files in `.collab/` and connects to the relay
+- Members connect to the relay and forward tool calls through WebSocket to the host
+- Users interact entirely through MCP tools inside Claude Code -- no separate terminals needed
 
 ## Testing
 
